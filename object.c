@@ -93,10 +93,58 @@ int object_exists(const ObjectID *id) {
 
 //
 // Returns 0 on success, -1 on error.
+<<<<<<< HEAD
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
     // TODO: Implement
     (void)type; (void)data; (void)len; (void)id_out;
     return -1;
+=======
+int object_write(ObjectType type, const void *data, size_t size, ObjectID *id_out) {
+    const char *type_str =
+        (type == OBJ_BLOB) ? "blob" :
+        (type == OBJ_TREE) ? "tree" :
+        (type == OBJ_COMMIT) ? "commit" : "unknown";
+
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, size) + 1;
+
+    size_t total_size = header_len + size;
+    char *buffer = malloc(total_size);
+    if (!buffer) return -1;
+
+    memcpy(buffer, header, header_len);
+    memcpy(buffer + header_len, data, size);
+
+    compute_hash(buffer, total_size, id_out);
+
+    if (object_exists(id_out)) {
+        free(buffer);
+        return 0;
+    }
+
+    char path[512];
+    object_path(id_out, path, sizeof(path));
+
+    char dir[512];
+    snprintf(dir, sizeof(dir), "%s", path);
+    char *slash = strrchr(dir, '/');
+    if (slash) {
+        *slash = '\0';
+        mkdir(dir, 0755);
+    }
+
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        free(buffer);
+        return -1;
+    }
+
+    fwrite(buffer, 1, total_size, f);
+    fclose(f);
+
+    free(buffer);
+    return 0;
+>>>>>>> master
 }
 
 // Read an object from the store.
@@ -121,8 +169,65 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 //
 // The caller is responsible for calling free(*data_out).
 // Returns 0 on success, -1 on error (file not found, corrupt, etc.).
+<<<<<<< HEAD
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
     // TODO: Implement
     (void)id; (void)type_out; (void)data_out; (void)len_out;
     return -1;
 }
+=======
+int object_read(const ObjectID *id, ObjectType *type_out,
+                void **data_out, size_t *len_out) {
+
+    char path[512];
+    object_path(id, path, sizeof(path));
+
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    rewind(f);
+
+    if (file_size <= 0) {
+        fclose(f);
+        return -1;
+    }
+
+    char *buffer = malloc(file_size + 1);
+    if (!buffer) {
+        fclose(f);
+        return -1;
+    }
+
+    if (fread(buffer, 1, file_size, f) != file_size) {
+        free(buffer);
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+
+    buffer[file_size] = '\0';
+
+    char type_str[16];
+    sscanf(buffer, "%s %zu", type_str, len_out);
+
+    char *data_start = memchr(buffer, '\0', file_size + 1);
+    if (!data_start) {
+        free(buffer);
+        return -1;
+    }
+    data_start++;
+
+    *data_out = malloc(*len_out);
+    if (!*data_out) {
+        free(buffer);
+        return -1;
+    }
+
+    memcpy(*data_out, data_start, *len_out);
+
+    free(buffer);
+    return 0;
+}
+>>>>>>> master
